@@ -1,0 +1,14 @@
+{
+    "channel_id": null,
+    "emoji": "\ud83e\udd21",
+    "threshold": 3,
+    "selfstar": false,
+    "locked": false,
+    "ignored_channels": [],
+    "ignored_members": [],
+    "ignored_roles": [],
+    "show_attachments": true,
+    "show_timestamp": true,
+    "show_jumpurl": true,
+    "color": 16734003
+}

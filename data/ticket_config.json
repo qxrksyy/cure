@@ -1,0 +1,14 @@
+{
+    "1195629319742038076": {
+        "enabled": false,
+        "support_role": null,
+        "category": null,
+        "log_channel": null,
+        "open_emoji": "\ud83c\udfab",
+        "close_emoji": "\ud83d\udd12",
+        "topics": [],
+        "open_message": "Thanks for creating a ticket! Support will be with you shortly.",
+        "active_tickets": {},
+        "panels": {}
+    }
+}

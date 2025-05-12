@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# VS Code settings
+.vscode/
+
+# PyCharm settings
+.idea/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Personal config files that might contain tokens
+config.json
+tokens.json
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Mac OS
+.DS_Store 
