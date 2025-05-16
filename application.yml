@@ -1,0 +1,56 @@
+# NOTE: This file is NOT used for the actual Lavalink server.
+# Lavalink is running on Raspberry Pi at 10.0.0.75:2333 with password: Confusion10072003$
+# This file is kept for reference only.
+
+server:
+  port: 2333
+  address: 127.0.0.1
+
+spring:
+  main:
+    banner-mode: log
+
+lavalink:
+  server:
+    password: "Confusion10072003$"
+    sources:
+      youtube: true
+      bandcamp: true
+      soundcloud: true
+      twitch: true
+      vimeo: true
+      http: true
+      local: false
+    bufferDurationMs: 400
+    youtubePlaylistLoadLimit: 6
+    playerUpdateInterval: 5
+    youtubeSearchEnabled: true
+    soundcloudSearchEnabled: true
+    ratelimit:
+      ipBlocks: []
+      excludedIps: []
+      strategy: "RotateOnBan"
+      searchTriggersFail: true
+      retryLimit: 3
+
+metrics:
+  prometheus:
+    enabled: false
+    endpoint: /metrics
+
+sentry:
+  dsn: ""
+  environment: ""
+  tags:
+    some_key: "some_value"
+    another_key: "another_value"
+
+logging:
+  file:
+    max-history: 30
+    max-size: 1GB
+  path: ./logs/
+
+  level:
+    root: INFO
+    lavalink: INFO 
