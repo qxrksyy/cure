@@ -2,13 +2,14 @@ import discord
 from discord.ext import commands
 import random
 import asyncio
-import datetime
+from datetime import datetime
 import logging
 from .pokemon_db import PokemonDB
+import sqlite3
 
 logger = logging.getLogger('bot')
 
-class Pokemon(commands.Cog):
+class PokemonCog(commands.Cog, name="Pokemon"):
     """Pokemon catching and battling commands"""
     
     def __init__(self, bot):
@@ -38,6 +39,54 @@ class Pokemon(commands.Cog):
                 'emoji': '🟣',
                 'price': 10000,
                 'description': 'Special Pokeball with a 100% catch rate'
+            },
+            'luxuryballs': {
+                'name': 'Luxury Ball',
+                'emoji': '🌑',
+                'price': 800,
+                'description': 'Comfortable Pokeball that makes caught Pokémon friendlier'
+            },
+            'heavyballs': {
+                'name': 'Heavy Ball',
+                'emoji': '⚙️',
+                'price': 600,
+                'description': 'Works better on heavy Pokémon'
+            },
+            'netballs': {
+                'name': 'Net Ball',
+                'emoji': '🕸️',
+                'price': 700,
+                'description': 'Works better on Water and Bug type Pokémon'
+            },
+            'diveballs': {
+                'name': 'Dive Ball',
+                'emoji': '🌊',
+                'price': 700,
+                'description': 'Works better on Water type Pokémon'
+            },
+            'nestballs': {
+                'name': 'Nest Ball',
+                'emoji': '🌿',
+                'price': 500,
+                'description': 'Works better on lower level Pokémon'
+            },
+            'quickballs': {
+                'name': 'Quick Ball',
+                'emoji': '⚡',
+                'price': 800,
+                'description': 'Works better at the start of encounters'
+            },
+            'duskballs': {
+                'name': 'Dusk Ball',
+                'emoji': '🌙',
+                'price': 800,
+                'description': 'Works better during night time'
+            },
+            'timerballs': {
+                'name': 'Timer Ball',
+                'emoji': '⏱️',
+                'price': 700,
+                'description': 'Gets better the longer the battle lasts'
             },
             'potions': {
                 'name': 'Potion',
@@ -119,11 +168,20 @@ class Pokemon(commands.Cog):
             
         # Check for Pokeballs
         inventory = self.db.get_inventory(ctx.author.id)
-        if (inventory['pokeballs'] + inventory['greatballs'] + 
-            inventory['ultraballs'] + inventory['masterballs']) <= 0:
+        
+        # Check if the user has any Pokéballs
+        has_pokeballs = False
+        for ball_type in ['pokeballs', 'greatballs', 'ultraballs', 'masterballs', 
+                          'luxuryballs', 'heavyballs', 'netballs', 'diveballs', 
+                          'nestballs', 'quickballs', 'duskballs', 'timerballs']:
+            if inventory.get(ball_type, 0) > 0:
+                has_pokeballs = True
+                break
+                
+        if not has_pokeballs:
             embed = discord.Embed(
                 title="No Pokeballs",
-                description="You don't have any Pokeballs! Buy some from the shop with `!shop`.",
+                description="You don't have any Pokeballs! Buy some from the shop with `!pokeshop`.",
                 color=discord.Color.red()
             )
             await ctx.send(embed=embed)
@@ -158,52 +216,59 @@ class Pokemon(commands.Cog):
         pokemon_sprite = pokemon_data['sprites']['front_default']
         pokemon_types = [t['type']['name'].capitalize() for t in pokemon_data['types']]
         
-        encounter_embed = discord.Embed(
-            title=f"A wild {pokemon_name} appeared!",
-            description=f"Type: {' / '.join(pokemon_types)}",
-            color=discord.Color.green()
-        )
+        # Check if this is a mythical or legendary Pokemon
+        is_mythical = pokemon_data['id'] in self.db.mythical_pokemon
+        is_legendary = pokemon_data['id'] in self.db.legendary_pokemon and not is_mythical
+        
+        # Create encounter embed with special formatting for different rarities
+        if is_mythical:
+            encounter_embed = discord.Embed(
+                title=f"✨ A MYTHICAL {pokemon_name} appeared! ✨",
+                description=f"Type: {' / '.join(pokemon_types)}\n**This is an EXTREMELY RARE mythical Pokémon!**",
+                color=discord.Color.purple()  # Purple color for mythicals
+            )
+            # Add special message for mythicals
+            encounter_embed.add_field(
+                name="Extraordinary Find!", 
+                value="Mythical Pokémon are almost impossible to find! This is an incredibly rare opportunity!", 
+                inline=False
+            )
+        elif is_legendary:
+            encounter_embed = discord.Embed(
+                title=f"⭐ A LEGENDARY {pokemon_name} appeared! ⭐",
+                description=f"Type: {' / '.join(pokemon_types)}\n**This is an extremely rare Pokémon!**",
+                color=discord.Color.gold()  # Gold color for legendaries
+            )
+        else:
+            encounter_embed = discord.Embed(
+                title=f"A wild {pokemon_name} appeared!",
+                description=f"Type: {' / '.join(pokemon_types)}",
+                color=discord.Color.green()
+            )
+            
         encounter_embed.set_image(url=pokemon_sprite)
         encounter_embed.add_field(name="Options", value="Choose a Pokeball to throw:")
         
         # Add available balls
         ball_options = []
-        if inventory['pokeballs'] > 0:
-            ball_options.append("🔴 Pokeball")
-        if inventory['greatballs'] > 0:
-            ball_options.append("🔵 Great Ball")
-        if inventory['ultraballs'] > 0:
-            ball_options.append("⚫ Ultra Ball")
-        if inventory['masterballs'] > 0:
-            ball_options.append("🟣 Master Ball")
+        for ball_type, ball_info in self.shop_items.items():
+            if ball_type.endswith('balls') and inventory.get(ball_type, 0) > 0:
+                ball_options.append(f"{ball_info['emoji']} {ball_info['name']} ({inventory[ball_type]})")
             
-        encounter_embed.add_field(name="Available Balls", value="\n".join(ball_options), inline=False)
+        encounter_embed.add_field(name="Available Balls", value="\n".join(ball_options) or "No Pokéballs available!", inline=False)
         
         await message.edit(embed=encounter_embed)
         
         # Add reaction options for Pokeballs
-        if inventory['pokeballs'] > 0:
-            await message.add_reaction("🔴")
-        if inventory['greatballs'] > 0:
-            await message.add_reaction("🔵")
-        if inventory['ultraballs'] > 0:
-            await message.add_reaction("⚫")
-        if inventory['masterballs'] > 0:
-            await message.add_reaction("🟣")
+        ball_emojis = []
+        for ball_type, ball_info in self.shop_items.items():
+            if ball_type.endswith('balls') and inventory.get(ball_type, 0) > 0:
+                await message.add_reaction(ball_info['emoji'])
+                ball_emojis.append(ball_info['emoji'])
             
         # Wait for reaction from user
         def check(reaction, user):
-            valid_emojis = []
-            if inventory['pokeballs'] > 0:
-                valid_emojis.append("🔴")
-            if inventory['greatballs'] > 0:
-                valid_emojis.append("🔵")
-            if inventory['ultraballs'] > 0:
-                valid_emojis.append("⚫")
-            if inventory['masterballs'] > 0:
-                valid_emojis.append("🟣")
-                
-            return user == ctx.author and str(reaction.emoji) in valid_emojis and reaction.message.id == message.id
+            return user == ctx.author and str(reaction.emoji) in ball_emojis and reaction.message.id == message.id
             
         try:
             reaction, user = await self.bot.wait_for('reaction_add', timeout=30.0, check=check)
@@ -218,28 +283,41 @@ class Pokemon(commands.Cog):
             
         # Determine which ball was used
         ball_type = ""
-        if str(reaction.emoji) == "🔴":
-            ball_type = "pokeballs"
-        elif str(reaction.emoji) == "🔵":
-            ball_type = "greatballs"
-        elif str(reaction.emoji) == "⚫":
-            ball_type = "ultraballs"
-        elif str(reaction.emoji) == "🟣":
-            ball_type = "masterballs"
+        for ball_key, ball_info in self.shop_items.items():
+            if ball_key.endswith('balls') and str(reaction.emoji) == ball_info['emoji']:
+                ball_type = ball_key
+                break
             
         # Remove the ball from inventory
         self.db.remove_from_inventory(ctx.author.id, ball_type, 1)
         
+        # Collect encounter data for special Pokéball effects
+        encounter_data = {
+            'turn_count': 1,  # First turn of the encounter
+            'time_of_day': 'day' if 6 <= datetime.now().hour < 18 else 'night',
+            'pokemon_weight': pokemon_data.get('weight', 50),
+            'pokemon_types': [t['type']['name'].lower() for t in pokemon_data['types']],
+            'pokemon_level': random.randint(1, 10)  # Wild Pokémon level range
+        }
+        
         # Calculate catch chance
-        catch_chance = self.db.calculate_catch_chance(ctx.author.id, ball_type)
+        catch_chance = self.db.calculate_catch_chance(
+            ctx.author.id, 
+            ball_type, 
+            pokemon_data['id'], 
+            encounter_data
+        )
         
         # Master ball always catches
         if ball_type == "masterballs":
             catch_chance = 1.0
             
         # Animated catching sequence
+        ball_name = self.shop_items[ball_type]['name']
+        ball_emoji = self.shop_items[ball_type]['emoji']
+        
         catch_embed = discord.Embed(
-            title=f"You threw a {ball_type[:-1].replace('balls', ' Ball')}!",
+            title=f"You threw a {ball_emoji} {ball_name}!",
             description="The ball is shaking...",
             color=discord.Color.blue()
         )
@@ -249,37 +327,115 @@ class Pokemon(commands.Cog):
         # Simulate ball shakes
         await asyncio.sleep(1)
         
+        # Update the last catch timestamp
+        conn = sqlite3.connect(self.db.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE trainers SET last_catch = ? WHERE user_id = ?",
+            (datetime.now().isoformat(), str(ctx.author.id))
+        )
+        conn.commit()
+        conn.close()
+        
         # Determine if caught
         caught = random.random() < catch_chance
         
-        if caught:
-            # Add Pokemon to collection
-            caught_pokemon = await self.db.add_pokemon(ctx.author.id, pokemon_data['id'])
-            
-            success_embed = discord.Embed(
-                title=f"Gotcha! {pokemon_name} was caught!",
-                description=f"The Pokemon has been added to your collection.",
-                color=discord.Color.green()
-            )
-            success_embed.set_image(url=pokemon_sprite)
-            success_embed.add_field(name="Level", value=caught_pokemon['level'])
-            success_embed.add_field(name="Types", value=" / ".join(caught_pokemon['types']).capitalize())
-            
-            # Display some stats
-            stats = caught_pokemon['stats']
-            stats_text = f"HP: {stats['hp']} | ATK: {stats['attack']} | DEF: {stats['defense']}\n"
-            stats_text += f"SP.ATK: {stats['special_attack']} | SP.DEF: {stats['special_defense']} | SPD: {stats['speed']}"
-            success_embed.add_field(name="Stats", value=stats_text, inline=False)
-            
-            await message.edit(embed=success_embed)
-        else:
-            fail_embed = discord.Embed(
-                title=f"Oh no! The wild {pokemon_name} broke free!",
-                description="The Pokemon escaped and ran away.",
+        try:
+            if caught:
+                # Add Pokemon to collection
+                caught_pokemon = await self.db.add_pokemon(ctx.author.id, pokemon_data['id'])
+                
+                if caught_pokemon:
+                    # Check the Pokémon type
+                    is_mythical = pokemon_data['id'] in self.db.mythical_pokemon
+                    is_legendary = pokemon_data['id'] in self.db.legendary_pokemon and not is_mythical
+                    
+                    if is_mythical:
+                        success_embed = discord.Embed(
+                            title=f"✨ EXTRAORDINARY! You caught the MYTHICAL {pokemon_name}! ✨",
+                            description=f"The MYTHICAL {pokemon_name} has been added to your collection!",
+                            color=discord.Color.purple()
+                        )
+                        success_embed.set_image(url=pokemon_sprite)
+                        success_embed.add_field(name="Level", value=caught_pokemon['level'])
+                        success_embed.add_field(name="Types", value=" / ".join(caught_pokemon['types']).capitalize())
+                        
+                        # Display stats for mythical (with emphasis)
+                        stats = caught_pokemon['stats']
+                        stats_text = f"HP: **{stats['hp']}** | ATK: **{stats['attack']}** | DEF: **{stats['defense']}**\n"
+                        stats_text += f"SP.ATK: **{stats['special_attack']}** | SP.DEF: **{stats['special_defense']}** | SPD: **{stats['speed']}**"
+                        success_embed.add_field(name="Mythical Stats", value=stats_text, inline=False)
+                        
+                        # Add a special congratulatory message
+                        success_embed.add_field(
+                            name="PHENOMENAL ACHIEVEMENT!", 
+                            value="You've caught one of the rarest Pokémon in existence! Mythical Pokémon are the stuff of legends - few trainers ever even see one, let alone catch one!",
+                            inline=False
+                        )
+                    elif is_legendary:
+                        success_embed = discord.Embed(
+                            title=f"⭐ INCREDIBLE! You caught the LEGENDARY {pokemon_name}! ⭐",
+                            description=f"The LEGENDARY {pokemon_name} has been added to your collection!",
+                            color=discord.Color.gold()
+                        )
+                        success_embed.set_image(url=pokemon_sprite)
+                        success_embed.add_field(name="Level", value=caught_pokemon['level'])
+                        success_embed.add_field(name="Types", value=" / ".join(caught_pokemon['types']).capitalize())
+                        
+                        # Display stats for legendary (with emphasis)
+                        stats = caught_pokemon['stats']
+                        stats_text = f"HP: **{stats['hp']}** | ATK: **{stats['attack']}** | DEF: **{stats['defense']}**\n"
+                        stats_text += f"SP.ATK: **{stats['special_attack']}** | SP.DEF: **{stats['special_defense']}** | SPD: **{stats['speed']}**"
+                        success_embed.add_field(name="Legendary Stats", value=stats_text, inline=False)
+                        
+                        # Add a special congratulatory message
+                        success_embed.add_field(
+                            name="Congratulations!", 
+                            value="You've caught an extremely rare Legendary Pokémon! This is a remarkable achievement that few trainers accomplish.",
+                            inline=False
+                        )
+                    else:
+                        success_embed = discord.Embed(
+                            title=f"Gotcha! {pokemon_name} was caught!",
+                            description=f"The Pokemon has been added to your collection.",
+                            color=discord.Color.green()
+                        )
+                        success_embed.set_image(url=pokemon_sprite)
+                        success_embed.add_field(name="Level", value=caught_pokemon['level'])
+                        success_embed.add_field(name="Types", value=" / ".join(caught_pokemon['types']).capitalize())
+                        
+                        # Display some stats
+                        stats = caught_pokemon['stats']
+                        stats_text = f"HP: {stats['hp']} | ATK: {stats['attack']} | DEF: {stats['defense']}\n"
+                        stats_text += f"SP.ATK: {stats['special_attack']} | SP.DEF: {stats['special_defense']} | SPD: {stats['speed']}"
+                        success_embed.add_field(name="Stats", value=stats_text, inline=False)
+                    
+                    await message.edit(embed=success_embed)
+                else:
+                    # Something went wrong with adding the Pokemon
+                    logger.error(f"Failed to add Pokemon {pokemon_data['id']} to user {ctx.author.id}'s collection")
+                    error_embed = discord.Embed(
+                        title="Error Catching Pokemon",
+                        description="There was an error adding this Pokemon to your collection. Please try again later.",
+                        color=discord.Color.red()
+                    )
+                    await message.edit(embed=error_embed)
+            else:
+                fail_embed = discord.Embed(
+                    title=f"Oh no! The wild {pokemon_name} broke free!",
+                    description="The Pokemon escaped and ran away.",
+                    color=discord.Color.red()
+                )
+                fail_embed.set_image(url=pokemon_sprite)
+                await message.edit(embed=fail_embed)
+        except Exception as e:
+            logger.error(f"Error in catch command: {e}")
+            error_embed = discord.Embed(
+                title="Error Processing Catch",
+                description="There was an error processing your Pokemon catch. Please try again later.",
                 color=discord.Color.red()
             )
-            fail_embed.set_image(url=pokemon_sprite)
-            await message.edit(embed=fail_embed)
+            await message.edit(embed=error_embed)
     
     @commands.command(name="pokemon")
     async def pokemon(self, ctx, *, pokemon_name=None):
@@ -717,9 +873,9 @@ class Pokemon(commands.Cog):
         
         await ctx.send(embed=embed)
         
-    @commands.command(name="buy")
+    @commands.command(name="pokebuy")
     async def buy(self, ctx, item: str, quantity: int = 1):
-        """Buy items from the Pokemon shop"""
+        """Buy items from the Pokeshop"""
         if not self.db.trainer_exists(ctx.author.id):
             embed = discord.Embed(
                 title="No Trainer Profile",
@@ -817,9 +973,9 @@ class Pokemon(commands.Cog):
         
         await ctx.send(embed=embed)
         
-    @commands.command(name="inventory", aliases=["inv"])
+    @commands.command(name="poke_inventory", aliases=["pinv"])
     async def inventory(self, ctx, member: discord.Member = None):
-        """View your inventory"""
+        """View your pokemon inventory"""
         target = member or ctx.author
         
         if not self.db.trainer_exists(target.id):
@@ -850,14 +1006,34 @@ class Pokemon(commands.Cog):
         
         # Add inventory items, grouped by category
         pokeballs_text = ""
-        if inventory['pokeballs'] > 0:
+        
+        # Standard Pokéballs
+        if inventory.get('pokeballs', 0) > 0:
             pokeballs_text += f"🔴 Pokeball: {inventory['pokeballs']}\n"
-        if inventory['greatballs'] > 0:
+        if inventory.get('greatballs', 0) > 0:
             pokeballs_text += f"🔵 Great Ball: {inventory['greatballs']}\n"
-        if inventory['ultraballs'] > 0:
+        if inventory.get('ultraballs', 0) > 0:
             pokeballs_text += f"⚫ Ultra Ball: {inventory['ultraballs']}\n"
-        if inventory['masterballs'] > 0:
+        if inventory.get('masterballs', 0) > 0:
             pokeballs_text += f"🟣 Master Ball: {inventory['masterballs']}\n"
+            
+        # Special Pokéballs
+        if inventory.get('luxuryballs', 0) > 0:
+            pokeballs_text += f"🌑 Luxury Ball: {inventory['luxuryballs']}\n"
+        if inventory.get('heavyballs', 0) > 0:
+            pokeballs_text += f"⚙️ Heavy Ball: {inventory['heavyballs']}\n"
+        if inventory.get('netballs', 0) > 0:
+            pokeballs_text += f"🕸️ Net Ball: {inventory['netballs']}\n"
+        if inventory.get('diveballs', 0) > 0:
+            pokeballs_text += f"🌊 Dive Ball: {inventory['diveballs']}\n"
+        if inventory.get('nestballs', 0) > 0:
+            pokeballs_text += f"🌿 Nest Ball: {inventory['nestballs']}\n"
+        if inventory.get('quickballs', 0) > 0:
+            pokeballs_text += f"⚡ Quick Ball: {inventory['quickballs']}\n"
+        if inventory.get('duskballs', 0) > 0:
+            pokeballs_text += f"🌙 Dusk Ball: {inventory['duskballs']}\n"
+        if inventory.get('timerballs', 0) > 0:
+            pokeballs_text += f"⏱️ Timer Ball: {inventory['timerballs']}\n"
             
         if pokeballs_text:
             embed.add_field(name="Pokeballs", value=pokeballs_text, inline=False)
@@ -865,15 +1041,15 @@ class Pokemon(commands.Cog):
             embed.add_field(name="Pokeballs", value="No Pokeballs", inline=False)
             
         healing_text = ""
-        if inventory['potions'] > 0:
+        if inventory.get('potions', 0) > 0:
             healing_text += f"🧪 Potion: {inventory['potions']}\n"
-        if inventory['super_potions'] > 0:
+        if inventory.get('super_potions', 0) > 0:
             healing_text += f"💊 Super Potion: {inventory['super_potions']}\n"
         if inventory.get('hyper_potions', 0) > 0:
             healing_text += f"💉 Hyper Potion: {inventory['hyper_potions']}\n"
         if inventory.get('max_potions', 0) > 0:
             healing_text += f"🔋 Max Potion: {inventory['max_potions']}\n"
-        if inventory['revives'] > 0:
+        if inventory.get('revives', 0) > 0:
             healing_text += f"💫 Revive: {inventory['revives']}\n"
             
         if healing_text:
@@ -1147,4 +1323,4 @@ class Pokemon(commands.Cog):
         await ctx.send(embed=embed)
 
 async def setup(bot):
-    await bot.add_cog(Pokemon(bot)) 
+    await bot.add_cog(PokemonCog(bot)) 
